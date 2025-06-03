@@ -17,9 +17,9 @@ const MAX_CONCURRENT_REQUESTS = 20; // Increased from 8
 const REQUEST_DELAY = 25; // Reduced from 100ms
 const BATCH_SIZE = 5; // Process tokens in batches
 
-// Dynamic update intervals
+// Dynamic update intervals - FIXED: Added missing constants
 const BASE_UPDATE_INTERVAL = 8000; // Base interval (8 seconds)
-const MIN_UPDATE_INTERVAL = 5000; // Minimum 5s between updates
+const MIN_UPDATE_INTERVAL = 5000; // Minimum 5s between updates  
 const MAX_UPDATE_INTERVAL = 20000; // Maximum 20s between updates
 
 // Token addresses for HyperEVM
@@ -132,15 +132,59 @@ async function fetchHyperCorePrices() {
             }
         }
         
+        // If missing tokens, try to get them from spot metadata
+        if (Object.keys(tokenPrices).length < targetTokens.length) {
+            const spotMeta = await fetchSpotMeta();
+            if (spotMeta && spotMeta.tokens) {
+                for (const token of targetTokens) {
+                    if (!tokenPrices[token]) {
+                        let tokenId = null;
+                        for (const t of spotMeta.tokens) {
+                            if (t.name === token) {
+                                tokenId = t.index;
+                                break;
+                            }
+                        }
+                        if (tokenId !== null && spotMeta.universe) {
+                            for (const pair of spotMeta.universe) {
+                                const tokens = pair.tokens || [];
+                                if (tokens.length >= 2 && tokens.includes(tokenId)) {
+                                    const indexName = `@${pair.index}`;
+                                    if (allMids[indexName]) {
+                                        tokenPrices[token] = parseFloat(allMids[indexName]);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Cache the result
         hyperCorePricesCache = tokenPrices;
         hyperCoreCacheTime = now;
         
+        console.log(`📊 HyperCore prices fetched: ${Object.keys(tokenPrices).join(', ')}`);
         return tokenPrices;
     } catch (error) {
         console.error(`Error fetching HyperCore prices: ${error.message}`);
         // Return cached data if available, even if expired
         return hyperCorePricesCache || {};
+    }
+}
+
+async function fetchSpotMeta() {
+    try {
+        const response = await fetch("https://api.hyperliquid.xyz/info", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: "spotMeta" })
+        });
+        return await response.json();
+    } catch (error) {
+        return null;
     }
 }
 
@@ -211,6 +255,7 @@ async function getHYPEPriceBatch(tokenEntries) {
         console.log(`⚠️  Failed to fetch prices for: ${failedTokens.join(', ')}`);
     }
     
+    console.log(`📈 EVM prices fetched: ${Object.keys(evmHYPEPrices).join(', ')}`);
     return evmHYPEPrices;
 }
 
@@ -242,6 +287,7 @@ async function generatePriceData() {
         }
         
         const coreHYPEPrices = calculateCoreHYPEPrices(hyperCorePrices);
+        console.log(`💎 Core HYPE prices calculated: ${Object.keys(coreHYPEPrices).join(', ')}`);
         
         // Process EVM tokens in parallel batches
         const tokenEntries = Object.entries(TOKENS).filter(([symbol]) => symbol !== 'HYPE');
@@ -269,6 +315,8 @@ async function generatePriceData() {
                     priceDifferencePercent: priceDiffPercent,
                     arbitrageDirection: direction
                 });
+            } else {
+                console.log(`⚠️  No Core price found for ${symbol} (looking for ${coreToken})`);
             }
         }
         
@@ -276,12 +324,13 @@ async function generatePriceData() {
         const result = {
             priceComparisons: priceComparisons.sort((a, b) => Math.abs(b.priceDifferencePercent) - Math.abs(a.priceDifferencePercent)),
             lastUpdated: new Date().toISOString(),
-            apiTime: (endTime - startTime) / 1000, // Renamed from updateTime
+            apiTime: (endTime - startTime) / 1000,
             hypeUSDPrice: hyperCorePrices['HYPE'],
-            tokensProcessed: Object.keys(evmHYPEPrices).length
+            tokensProcessed: Object.keys(evmHYPEPrices).length,
+            comparisonsCreated: priceComparisons.length
         };
         
-        console.log(`✅ API fetch completed in ${result.apiTime.toFixed(2)}s (${result.tokensProcessed}/${tokenEntries.length} tokens)`);
+        console.log(`✅ API fetch completed in ${result.apiTime.toFixed(2)}s (${result.tokensProcessed}/${tokenEntries.length} tokens, ${result.comparisonsCreated} comparisons)`);
         return result;
         
     } catch (error) {
@@ -369,6 +418,8 @@ app.get('/api/health', (req, res) => {
         status: 'ok', 
         clients: clients.size, 
         lastUpdate: latestData?.lastUpdated,
+        tokensProcessed: latestData?.tokensProcessed,
+        comparisonsCreated: latestData?.comparisonsCreated,
         cacheStatus: {
             hyperCoreCached: hyperCorePricesCache !== null,
             cacheAge: hyperCorePricesCache ? Date.now() - hyperCoreCacheTime : 0

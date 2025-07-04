@@ -22,7 +22,7 @@ const BASE_UPDATE_INTERVAL = 8000; // Base interval (8 seconds)
 const MIN_UPDATE_INTERVAL = 5000; // Minimum 5s between updates  
 const MAX_UPDATE_INTERVAL = 20000; // Maximum 20s between updates
 
-// Token addresses for HyperEVM
+// Token addresses for HyperEVM - EXPANDED LIST
 const TOKENS = {
     'HYPE': '0x5555555555555555555555555555555555555555',
     'BTC': '0x9FDBdA0A5e284c32744D2f17Ee5c74B284993463',
@@ -32,12 +32,31 @@ const TOKENS = {
     'PURR': '0x9b498C3c8A0b8CD9BA1D9851d40D186F1872b44E',
     'FEUSD': '0x02c6a2fA58cC01A18B8D9E00eA48d65E4dF26c70',
     'USDXL': '0xca79db4B49f608eF54a5CB813FbEd3a6387bC645',
-    'BUDDY': '0x47bb061C0204Af921F43DC73C7D7768d2672DdEE'
+    'BUDDY': '0x47bb061C0204Af921F43DC73C7D7768d2672DdEE',
+    'HFUN': '0xa320D9f65ec992EfF38622c63627856382Db726c',
+    'LIQD': '0x1Ecd15865D7F8019D546f76d095d9c93cc34eDFa',
+    'PIP': '0x1bEe6762F0B522c606DC2Ffb106C0BB391b2E309',
+    'UFART': '0xTBD_UFART_ADDRESS',  // TODO: Add actual UFART address
+    'USOL': '0xTBD_USOL_ADDRESS',   // TODO: Add actual USOL address  
+    'RUB': '0xTBD_RUB_ADDRESS'      // TODO: Add actual RUB address
 };
 
 const HYPERCORE_TOKEN_MAPPING = {
-    'BTC': 'BTC', 'ETH': 'ETH', 'HYPE': 'HYPE', 'USDTO': 'USDT0',
-    'USDE': 'USDE', 'PURR': 'PURR', 'FEUSD': 'FEUSD', 'USDXL': 'USDXL', 'BUDDY': 'BUDDY'
+    'BTC': 'BTC', 
+    'ETH': 'ETH', 
+    'HYPE': 'HYPE', 
+    'USDTO': 'USDT0',
+    'USDE': 'USDE', 
+    'PURR': 'PURR', 
+    'FEUSD': 'FEUSD', 
+    'USDXL': 'USDXL', 
+    'BUDDY': 'BUDDY',
+    'HFUN': 'HFUN',
+    'LIQD': 'LIQD', 
+    'PIP': 'PIP',
+    'UFART': 'UFART',
+    'USOL': 'USOL',
+    'RUB': 'RUB'
 };
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -123,7 +142,7 @@ async function fetchHyperCorePrices() {
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         
         const allMids = await response.json();
-        const targetTokens = ["BTC", "ETH", "HYPE", "USDT0", "USDE", "PURR", "FEUSD", "USDXL", "BUDDY"];
+        const targetTokens = ["BTC", "ETH", "HYPE", "USDT0", "USDE", "PURR", "FEUSD", "USDXL", "BUDDY", "HFUN", "LIQD", "PIP", "UFART", "USOL", "RUB"];
         const tokenPrices = {};
         
         for (const token of targetTokens) {
@@ -188,17 +207,46 @@ async function fetchSpotMeta() {
     }
 }
 
-// Batch processing for HYPE prices with error resilience
+// Realistic trade amounts for each token to account for price impact
+// These amounts represent the actual quantities you would trade to test for arbitrage
+// Adjust these based on your trading strategy and risk tolerance
+const REALISTIC_TRADE_AMOUNTS = {
+    'BTC': '0.001',      // 0.001 BTC (~$100-200) - Conservative amount for expensive token
+    'ETH': '0.1',        // 0.1 ETH (~$200-400) - Conservative amount for expensive token
+    'USDTO': '100',      // 100 USDT - Reasonable stablecoin amount
+    'USDE': '100',       // 100 USDe - Reasonable stablecoin amount
+    'PURR': '1000',      // 1000 PURR - Mid-tier token amount
+    'FEUSD': '100',      // 100 FEUSD - Stablecoin-like amount
+    'USDXL': '100',      // 100 USDXL - Stablecoin-like amount
+    'BUDDY': '10000',    // 10000 BUDDY - As requested by user
+    'HFUN': '300',       // 500 HFUN - Gaming token amount
+    'LIQD': '20000',       // 200 LIQD - DEX token amount
+    'PIP': '500',       // 1000 PIP - Mid-tier amount
+    'UFART': '50000',    // 50000 UFART - Meme token, large amounts normal
+    'USOL': '1',         // 1 USOL (~$200-300) - Expensive token, small amount
+    'RUB': '5000'        // 5000 RUB - Currency token, larger amount
+};
+
+// Function to update trade amounts dynamically (useful for testing)
+function updateTradeAmount(token, amount) {
+    REALISTIC_TRADE_AMOUNTS[token] = amount.toString();
+    console.log(`📊 Updated ${token} trade amount to ${amount}`);
+}
+
+// Batch processing for HYPE prices with REALISTIC trade amounts
 async function getHYPEPriceBatch(tokenEntries) {
     const promises = tokenEntries.map(async ([symbol, address]) => {
         try {
             const hypeAddress = TOKENS['HYPE'];
+            const tradeAmount = REALISTIC_TRADE_AMOUNTS[symbol] || '1';
             
-            // Try direct route first
+            console.log(`🔍 Getting quote for ${tradeAmount} ${symbol} → HYPE`);
+            
+            // Try direct route first (Token → HYPE)
             const directResponse = await makeRequest(`${API_BASE_URL}/route`, {
                 tokenA: address,
                 tokenB: hypeAddress,
-                amountIn: 1,
+                amountIn: tradeAmount,
                 multiHop: true
             });
             
@@ -206,23 +254,40 @@ async function getHYPEPriceBatch(tokenEntries) {
                 const route = directResponse.data.bestPath;
                 const amountOut = parseFloat(route.estimatedAmountOut || route.amountOut || 0);
                 if (amountOut > 0) {
-                    return [symbol, { hypePrice: amountOut, direct: true }];
+                    const pricePerUnit = amountOut / parseFloat(tradeAmount);
+                    return [symbol, { 
+                        hypePrice: pricePerUnit, 
+                        direct: true,
+                        tradeAmount: parseFloat(tradeAmount),
+                        totalHypeOut: amountOut,
+                        route: 'direct'
+                    }];
                 }
             }
             
-            // Try reverse route
+            // Try reverse route (HYPE → Token)
+            // For reverse, we need to estimate how much HYPE to get our target token amount
+            const estimatedHypeIn = parseFloat(tradeAmount) * 0.5; // Start with rough estimate
+            
             const reverseResponse = await makeRequest(`${API_BASE_URL}/route`, {
                 tokenA: hypeAddress,
                 tokenB: address,
-                amountIn: 1,
+                amountIn: estimatedHypeIn.toString(),
                 multiHop: true
             });
             
             if (reverseResponse.success && reverseResponse.data && reverseResponse.data.bestPath) {
                 const route = reverseResponse.data.bestPath;
-                const amountOut = parseFloat(route.estimatedAmountOut || route.amountOut || 0);
-                if (amountOut > 0) {
-                    return [symbol, { hypePrice: 1 / amountOut, direct: false }];
+                const tokenAmountOut = parseFloat(route.estimatedAmountOut || route.amountOut || 0);
+                if (tokenAmountOut > 0) {
+                    const pricePerUnit = estimatedHypeIn / tokenAmountOut;
+                    return [symbol, { 
+                        hypePrice: pricePerUnit, 
+                        direct: false,
+                        tradeAmount: tokenAmountOut,
+                        totalHypeIn: estimatedHypeIn,
+                        route: 'reverse'
+                    }];
                 }
             }
             
@@ -245,6 +310,7 @@ async function getHYPEPriceBatch(tokenEntries) {
             const [symbol, priceData] = result.value;
             if (priceData) {
                 evmHYPEPrices[symbol] = priceData;
+                console.log(`💰 ${symbol}: ${priceData.tradeAmount} tokens = ${priceData.totalHypeOut || priceData.totalHypeIn} HYPE (${priceData.route})`);
             } else {
                 failedTokens.push(symbol);
             }
@@ -255,7 +321,7 @@ async function getHYPEPriceBatch(tokenEntries) {
         console.log(`⚠️  Failed to fetch prices for: ${failedTokens.join(', ')}`);
     }
     
-    console.log(`📈 EVM prices fetched: ${Object.keys(evmHYPEPrices).join(', ')}`);
+    console.log(`📈 EVM prices fetched with realistic amounts: ${Object.keys(evmHYPEPrices).join(', ')}`);
     return evmHYPEPrices;
 }
 
@@ -296,24 +362,62 @@ async function generatePriceData() {
         const priceComparisons = [];
         for (const [symbol, evmData] of Object.entries(evmHYPEPrices)) {
             const coreToken = HYPERCORE_TOKEN_MAPPING[symbol];
-            const coreHYPEPrice = coreHYPEPrices[coreToken];
+            const coreUnitPrice = coreHYPEPrices[coreToken];
             
-            if (coreHYPEPrice) {
-                const priceDiff = evmData.hypePrice - coreHYPEPrice;
-                const priceDiffPercent = (priceDiff / coreHYPEPrice) * 100;
+            if (coreUnitPrice) {
+                const tradeAmount = REALISTIC_TRADE_AMOUNTS[symbol] || '1';
+                const tokenAmount = parseFloat(tradeAmount);
+                
+                // Calculate Core price for the realistic amount
+                const corePrice = coreUnitPrice * tokenAmount;
+                
+                // EVM price for the realistic amount (from the quote)
+                const evmPrice = evmData.totalHypeOut || evmData.totalHypeIn;
+                
+                // Calculate difference based on actual amounts
+                const priceDiff = evmPrice - corePrice;
+                const priceDiffPercent = (priceDiff / corePrice) * 100;
                 
                 let direction = 'None';
                 if (Math.abs(priceDiffPercent) > 0.2) {
                     direction = priceDiffPercent > 0 ? 'Core → EVM' : 'EVM → Core';
                 }
                 
+                // Calculate suggested HYPE amount based on the profitable difference
+                let suggestedAmount = null;
+                if (Math.abs(priceDiffPercent) > 0.5) { // Only suggest for profitable opportunities
+                    const baseHypeAmount = Math.abs(priceDiff); // Use the actual profit amount
+                    
+                    // Scale based on profit percentage
+                    if (Math.abs(priceDiffPercent) > 2.0) {
+                        suggestedAmount = baseHypeAmount * 2.0;   // 2x the profit for high profit
+                    } else if (Math.abs(priceDiffPercent) > 1.0) {
+                        suggestedAmount = baseHypeAmount * 1.5;   // 1.5x for medium profit
+                    } else {
+                        suggestedAmount = baseHypeAmount;         // Just the profit amount for low profit
+                    }
+                    
+                    // Cap the suggested amount to reasonable limits
+                    suggestedAmount = Math.min(suggestedAmount, 100); // Max 100 HYPE
+                    suggestedAmount = Math.max(suggestedAmount, 1);   // Min 1 HYPE
+                }
+
                 priceComparisons.push({
                     token: symbol,
-                    corePrice: coreHYPEPrice,
-                    evmPrice: evmData.hypePrice,
-                    priceDifference: priceDiff,
+                    tokenAmount: tokenAmount,           // Show the actual token amount being quoted
+                    corePrice: corePrice,              // Core price for the full amount
+                    evmPrice: evmPrice,                // EVM price for the full amount
+                    priceDifference: priceDiff,        // Difference in HYPE for the full amount
                     priceDifferencePercent: priceDiffPercent,
-                    arbitrageDirection: direction
+                    arbitrageDirection: direction,
+                    suggestedAmount: suggestedAmount,
+                    // Additional info about the quote
+                    quoteInfo: {
+                        tokenAmount: evmData.tradeAmount,
+                        route: evmData.route,
+                        coreUnitPrice: coreUnitPrice,
+                        evmUnitPrice: evmData.hypePrice
+                    }
                 });
             } else {
                 console.log(`⚠️  No Core price found for ${symbol} (looking for ${coreToken})`);
@@ -436,6 +540,58 @@ app.post('/api/refresh', async (req, res) => {
     res.json({ success: true, data });
 });
 
+// Get current trade amounts
+app.get('/api/trade-amounts', (req, res) => {
+    res.json({ 
+        success: true, 
+        tradeAmounts: REALISTIC_TRADE_AMOUNTS,
+        description: "Current realistic trade amounts used for price quotes"
+    });
+});
+
+// Update trade amounts
+app.post('/api/trade-amounts', (req, res) => {
+    try {
+        const { token, amount } = req.body;
+        
+        if (!token || amount === undefined) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing token or amount in request body" 
+            });
+        }
+        
+        if (!REALISTIC_TRADE_AMOUNTS.hasOwnProperty(token.toUpperCase())) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Token ${token} not found. Available tokens: ${Object.keys(REALISTIC_TRADE_AMOUNTS).join(', ')}` 
+            });
+        }
+        
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Amount must be a positive number" 
+            });
+        }
+        
+        updateTradeAmount(token.toUpperCase(), numAmount);
+        
+        res.json({ 
+            success: true, 
+            message: `Updated ${token.toUpperCase()} trade amount to ${numAmount}`,
+            newAmount: REALISTIC_TRADE_AMOUNTS[token.toUpperCase()]
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 // Fast update endpoint (skips interval)
 app.post('/api/update-now', async (req, res) => {
     console.log('⚡ Immediate update triggered');
@@ -464,6 +620,325 @@ app.post('/api/update-now', async (req, res) => {
     });
 });
 
+// Arbitrage execution planning endpoint
+app.post('/api/plan-arbitrage', (req, res) => {
+    try {
+        const { token, direction, tokenAmount, corePrice, evmPrice, priceDifference } = req.body;
+        
+        if (!token || !direction || !tokenAmount || !corePrice || !evmPrice) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing required parameters" 
+            });
+        }
+        
+        // Generate arbitrage execution plan
+        const plan = generateArbitragePlan(token, direction, tokenAmount, corePrice, evmPrice, priceDifference);
+        
+        res.json({ 
+            success: true, 
+            plan: plan
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// Execute arbitrage endpoint (placeholder for now)
+app.post('/api/execute-arbitrage', (req, res) => {
+    try {
+        const { token, direction, plan } = req.body;
+        
+        if (!token || !direction || !plan) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Missing required parameters" 
+            });
+        }
+        
+        // For now, just return a simulation message
+        // Later this will call bridge.py functions
+        res.json({ 
+            success: true, 
+            message: "Arbitrage execution will be implemented next",
+            execution: {
+                status: "simulated",
+                steps: plan.steps.map(step => ({...step, status: "pending"}))
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+function generateArbitragePlan(token, direction, tokenAmount, corePrice, evmPrice, priceDifference) {
+    const steps = [];
+    
+    // Determine which chain has better price and execute round-trip arbitrage
+    // Always start and end on the same chain to maintain HYPE balance
+    
+    if (direction === "EVM → Core") {
+        // Token is cheaper on EVM, more expensive on Core
+        // Strategy: Buy on EVM → Bridge to Core → Sell on Core → Bridge HYPE back to EVM
+        
+        const startingHype = Math.ceil(evmPrice);
+        const expectedCoreHype = Math.floor(corePrice);
+        
+        steps.push({
+            step: 1,
+            action: "swap_evm_buy",
+            description: `[EVM] Buy ${tokenAmount.toLocaleString()} ${token} with ${startingHype} HYPE`,
+            chain: "HyperEVM",
+            type: "swap",
+            from: "HYPE",
+            to: token,
+            amount: startingHype,
+            expected: tokenAmount,
+            startChain: true
+        });
+        
+        steps.push({
+            step: 2,
+            action: "bridge_token_to_core",
+            description: `[Bridge] Transfer ${tokenAmount.toLocaleString()} ${token}: EVM → Core`,
+            chain: "Bridge",
+            type: "bridge",
+            token: token,
+            amount: tokenAmount,
+            direction: "evm_to_core"
+        });
+        
+        steps.push({
+            step: 3,
+            action: "spot_sell_core",
+            description: `[Core] Sell ${tokenAmount.toLocaleString()} ${token} for ${expectedCoreHype} HYPE`,
+            chain: "HyperCore",
+            type: "spot_trade",
+            side: "sell",
+            token: token,
+            amount: tokenAmount,
+            expected: expectedCoreHype
+        });
+        
+        steps.push({
+            step: 4,
+            action: "bridge_hype_back_to_evm",
+            description: `[Bridge] Transfer ${expectedCoreHype} HYPE: Core → EVM (Return to start)`,
+            chain: "Bridge",
+            type: "bridge",
+            token: "HYPE",
+            amount: expectedCoreHype,
+            direction: "core_to_evm",
+            endChain: true
+        });
+        
+        return {
+            token: token,
+            direction: direction,
+            tokenAmount: tokenAmount,
+            startChain: "HyperEVM",
+            endChain: "HyperEVM",
+            steps: steps,
+            summary: {
+                totalCost: startingHype,
+                totalReturn: expectedCoreHype,
+                estimatedProfit: expectedCoreHype - startingHype,
+                profitPercent: (((expectedCoreHype - startingHype) / startingHype) * 100).toFixed(2),
+                isProfitable: expectedCoreHype > startingHype
+            },
+            risks: [
+                "Price slippage during swaps",
+                "Bridge transfer delays (5-10 minutes each)",
+                "Gas costs on HyperEVM swaps",
+                "Market movement during execution",
+                "Spot trading slippage on HyperCore"
+            ]
+        };
+        
+    } else if (direction === "Core → EVM") {
+        // Token is cheaper on Core, more expensive on EVM
+        // Strategy: Bridge HYPE to Core → Buy on Core → Bridge to EVM → Sell on EVM
+        
+        const startingHype = Math.ceil(corePrice);
+        const expectedEvmHype = Math.floor(evmPrice);
+        
+        steps.push({
+            step: 1,
+            action: "bridge_hype_to_core",
+            description: `[Bridge] Transfer ${startingHype} HYPE: EVM → Core`,
+            chain: "Bridge",
+            type: "bridge",
+            token: "HYPE",
+            amount: startingHype,
+            direction: "evm_to_core",
+            startChain: true
+        });
+        
+        steps.push({
+            step: 2,
+            action: "spot_buy_core",
+            description: `[Core] Buy ${tokenAmount.toLocaleString()} ${token} with ${startingHype} HYPE`,
+            chain: "HyperCore",
+            type: "spot_trade",
+            side: "buy",
+            token: token,
+            amount: tokenAmount,
+            cost: startingHype
+        });
+        
+        steps.push({
+            step: 3,
+            action: "bridge_token_to_evm",
+            description: `[Bridge] Transfer ${tokenAmount.toLocaleString()} ${token}: Core → EVM`,
+            chain: "Bridge",
+            type: "bridge",
+            token: token,
+            amount: tokenAmount,
+            direction: "core_to_evm"
+        });
+        
+        steps.push({
+            step: 4,
+            action: "swap_evm_sell",
+            description: `[EVM] Sell ${tokenAmount.toLocaleString()} ${token} for ${expectedEvmHype} HYPE (Return to start)`,
+            chain: "HyperEVM",
+            type: "swap",
+            from: token,
+            to: "HYPE",
+            amount: tokenAmount,
+            expected: expectedEvmHype,
+            endChain: true
+        });
+        
+        return {
+            token: token,
+            direction: direction,
+            tokenAmount: tokenAmount,
+            startChain: "HyperEVM",
+            endChain: "HyperEVM",
+            steps: steps,
+            summary: {
+                totalCost: startingHype,
+                totalReturn: expectedEvmHype,
+                estimatedProfit: expectedEvmHype - startingHype,
+                profitPercent: (((expectedEvmHype - startingHype) / startingHype) * 100).toFixed(2),
+                isProfitable: expectedEvmHype > startingHype
+            },
+            risks: [
+                "Price slippage during swaps",
+                "Bridge transfer delays (5-10 minutes each)",
+                "Gas costs on HyperEVM swaps",
+                "Market movement during execution",
+                "Spot trading slippage on HyperCore"
+            ]
+        };
+    }
+    
+    // Alternative: Start from Core chain
+    else if (direction === "Core → EVM (Start Core)") {
+        // Start with HYPE on Core, end with HYPE on Core
+        const startingHype = Math.ceil(corePrice);
+        const expectedEvmHype = Math.floor(evmPrice);
+        
+        steps.push({
+            step: 1,
+            action: "spot_buy_core",
+            description: `[Core] Buy ${tokenAmount.toLocaleString()} ${token} with ${startingHype} HYPE`,
+            chain: "HyperCore",
+            type: "spot_trade",
+            side: "buy",
+            token: token,
+            amount: tokenAmount,
+            cost: startingHype,
+            startChain: true
+        });
+        
+        steps.push({
+            step: 2,
+            action: "bridge_token_to_evm",
+            description: `[Bridge] Transfer ${tokenAmount.toLocaleString()} ${token}: Core → EVM`,
+            chain: "Bridge",
+            type: "bridge",
+            token: token,
+            amount: tokenAmount,
+            direction: "core_to_evm"
+        });
+        
+        steps.push({
+            step: 3,
+            action: "swap_evm_sell",
+            description: `[EVM] Sell ${tokenAmount.toLocaleString()} ${token} for ${expectedEvmHype} HYPE`,
+            chain: "HyperEVM",
+            type: "swap",
+            from: token,
+            to: "HYPE",
+            amount: tokenAmount,
+            expected: expectedEvmHype
+        });
+        
+        steps.push({
+            step: 4,
+            action: "bridge_hype_back_to_core",
+            description: `[Bridge] Transfer ${expectedEvmHype} HYPE: EVM → Core (Return to start)`,
+            chain: "Bridge",
+            type: "bridge",
+            token: "HYPE",
+            amount: expectedEvmHype,
+            direction: "evm_to_core",
+            endChain: true
+        });
+        
+        return {
+            token: token,
+            direction: direction,
+            tokenAmount: tokenAmount,
+            startChain: "HyperCore",
+            endChain: "HyperCore",
+            steps: steps,
+            summary: {
+                totalCost: startingHype,
+                totalReturn: expectedEvmHype,
+                estimatedProfit: expectedEvmHype - startingHype,
+                profitPercent: (((expectedEvmHype - startingHype) / startingHype) * 100).toFixed(2),
+                isProfitable: expectedEvmHype > startingHype
+            },
+            risks: [
+                "Price slippage during swaps",
+                "Bridge transfer delays (5-10 minutes each)",
+                "Gas costs on HyperEVM swaps",
+                "Market movement during execution",
+                "Spot trading slippage on HyperCore"
+            ]
+        };
+    }
+    
+    // Default fallback
+    return {
+        token: token,
+        direction: direction,
+        tokenAmount: tokenAmount,
+        startChain: "Unknown",
+        endChain: "Unknown",
+        steps: [],
+        summary: {
+            totalCost: 0,
+            totalReturn: 0,
+            estimatedProfit: 0,
+            profitPercent: "0.00",
+            isProfitable: false
+        },
+        risks: ["Invalid direction specified"]
+    };
+}
+
 // Start server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
@@ -472,6 +947,12 @@ server.listen(PORT, () => {
     console.log(`🔗 REST API: http://localhost:${PORT}/api/prices`);
     console.log(`🔄 Manual refresh: POST http://localhost:${PORT}/api/refresh`);
     console.log(`⚡ Immediate update: POST http://localhost:${PORT}/api/update-now`);
+    console.log(`📈 Trade amounts: GET http://localhost:${PORT}/api/trade-amounts`);
+    console.log(`⚙️  Update amounts: POST http://localhost:${PORT}/api/trade-amounts`);
+    console.log(`🎯 Plan arbitrage: POST http://localhost:${PORT}/api/plan-arbitrage`);
+    console.log(`⚡ Execute arbitrage: POST http://localhost:${PORT}/api/execute-arbitrage`);
+    console.log(`\n💡 Example: Update BUDDY trade amount to 15000:`);
+    console.log(`   curl -X POST http://localhost:${PORT}/api/trade-amounts -H "Content-Type: application/json" -d '{"token":"BUDDY","amount":15000}'`);
     
     // Start update loop
     updateLoop();
